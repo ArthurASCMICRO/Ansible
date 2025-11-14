@@ -1,0 +1,7 @@
+---
+- name: Déploiement de base sur les postes NEV
+  hosts: site_nev
+  gather_facts: no
+
+  roles:
+    - windows_base

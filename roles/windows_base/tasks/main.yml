@@ -1,0 +1,8 @@
+---
+- name: Ping Windows host
+  ansible.windows.win_ping:
+
+- name: Créer un dossier de test sur le poste
+  ansible.windows.win_file:
+    path: C:\Temp\ansible_test
+    state: directory
