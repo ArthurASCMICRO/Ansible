@@ -1,73 +1,93 @@
 ---
-- name: Diagnostic winget VLC (résumé)
+- name: Fix winget sources + install VLC
   hosts: all
   gather_facts: no
 
   tasks:
-    - name: Winget version
+    - name: Version winget
       ansible.windows.win_command: winget --version
       register: winget_version
       changed_when: false
 
-    - name: Winget list VLC (table)
-      ansible.windows.win_command: winget list --id VideoLAN.VLC --exact
+    - name: winget source list
+      ansible.windows.win_command: winget source list
+      register: source_list_1
+      changed_when: false
+      failed_when: false
+
+    - name: DEBUG sources (avant)
+      ansible.builtin.debug:
+        msg:
+          - "{{ winget_version.stdout | default('') | trim }}"
+          - "{{ source_list_1.stdout | default('') }}"
+
+    - name: Reset des sources winget
+      ansible.windows.win_command: winget source reset --force
+      register: source_reset
+      changed_when: false
+      failed_when: false
+
+    - name: Update des sources winget
+      ansible.windows.win_command: winget source update
+      register: source_update
+      changed_when: false
+      failed_when: false
+
+    - name: winget source list (apres)
+      ansible.windows.win_command: winget source list
+      register: source_list_2
+      changed_when: false
+      failed_when: false
+
+    - name: DEBUG sources (apres)
+      ansible.builtin.debug:
+        msg:
+          - "reset_rc={{ source_reset.rc }}"
+          - "update_rc={{ source_update.rc }}"
+          - "{{ source_list_2.stdout | default('') }}"
+
+    - name: Tester list VLC en forçant la source winget
+      ansible.windows.win_command: winget list --id VideoLAN.VLC --exact --source winget
       register: vlc_list
       changed_when: false
       failed_when: false
 
-    - name: Winget list VLC (json)
-      ansible.windows.win_command: winget list --id VideoLAN.VLC --exact --output json
-      register: vlc_list_json
-      changed_when: false
-      failed_when: false
-
-    - name: Winget show VLC (json)
-      ansible.windows.win_command: winget show --id VideoLAN.VLC --exact --output json
-      register: vlc_show_json
-      changed_when: false
-      failed_when: false
-
-    - name: Résumé VLC (winget)
+    - name: DEBUG list VLC
       ansible.builtin.debug:
         msg:
-          - "winget={{ winget_version.stdout | default('') | trim }}"
           - "list_rc={{ vlc_list.rc }}"
-          - "list_stdout_first_lines={{ (vlc_list.stdout | default('') ).splitlines()[0:6] }}"
-          - "list_json_rc={{ vlc_list_json.rc }}"
-          - "list_json_first_300={{ (vlc_list_json.stdout | default('') )[:300] }}"
-          - "show_json_rc={{ vlc_show_json.rc }}"
-          - "show_json_first_300={{ (vlc_show_json.stdout | default('') )[:300] }}"
+          - "{{ vlc_list.stdout | default('') }}"
+          - "{{ vlc_list.stderr | default('') }}"
 
-    - name: Sources winget (json)
-      ansible.windows.win_command: winget source list --output json
-      register: winget_sources_json
+    - name: Installer VLC (forcer source winget + logs)
+      ansible.windows.win_command: >
+        winget install --id VideoLAN.VLC --exact
+        --source winget
+        --silent
+        --scope machine
+        --accept-package-agreements
+        --accept-source-agreements
+        --disable-interactivity
+        --verbose-logs
+        --log C:\Temp\winget-vlc-install.log
+      register: vlc_install
       changed_when: false
       failed_when: false
 
-    - name: Résumé sources (winget)
-      ansible.builtin.debug:
-        msg:
-          - "sources_json_rc={{ winget_sources_json.rc }}"
-          - "sources_json_first_300={{ (winget_sources_json.stdout | default('') )[:300] }}"
-
-    - name: Vérifier si VLC existe via registre (64-bit)
+    - name: Lire log winget (tail)
       ansible.windows.win_shell: |
-        $keys = @(
-          'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*',
-          'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
-        )
-        $apps = foreach ($k in $keys) {
-          Get-ItemProperty $k -ErrorAction SilentlyContinue |
-            Where-Object { $_.DisplayName -match 'VLC media player' } |
-            Select-Object DisplayName, DisplayVersion, Publisher, UninstallString
+        if (Test-Path "C:\Temp\winget-vlc-install.log") {
+          Get-Content "C:\Temp\winget-vlc-install.log" -Tail 200
+        } else {
+          "Log absent"
         }
-        $apps | ConvertTo-Json -Compress
-      register: vlc_reg
+      register: vlc_log
       changed_when: false
       failed_when: false
 
-    - name: Résumé registre VLC
+    - name: DEBUG install rc + log
       ansible.builtin.debug:
         msg:
-          - "vlc_reg_rc={{ vlc_reg.rc }}"
-          - "vlc_reg_json={{ vlc_reg.stdout | default('') | trim }}"
+          - "install_rc={{ vlc_install.rc }}"
+          - "{{ (vlc_install.stdout | default(''))[-800:] }}"
+          - "{{ vlc_log.stdout | default('') }}"
