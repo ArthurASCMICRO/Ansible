@@ -1,23 +1,43 @@
 ---
-- name: Installer VLC via winget (commande minimale fonctionnelle)
+- name: TEST - Installer VLC depuis partage puis nettoyer
   hosts: all
   gather_facts: no
 
+  vars:
+    vlc_src: "\\\\nevs02\\s$\\ADMINAPP\\BatMaj\\BundlePush\\NoopyBIN\\NoopyPush\\.bin\\VLC\\vlc-3.0.18-win64.exe"
+    vlc_local: "C:\\Temp\\vlc-3.0.18-win64.exe"
+
   tasks:
-    - name: Vérifier winget
-      ansible.windows.win_command: winget --version
-      changed_when: false
+    - name: S'assurer que C:\Temp existe
+      ansible.windows.win_file:
+        path: C:\Temp
+        state: directory
 
-    - name: Installer ou mettre à jour VLC (mode minimal)
-      ansible.windows.win_command: >
-        winget install vlc
-        --accept-source-agreements
-      register: vlc_install
-      changed_when: "'Installé correctement' in vlc_install.stdout or 'mise à niveau' in vlc_install.stdout"
-      failed_when: false
+    - name: Copier l'installeur VLC en local
+      ansible.windows.win_copy:
+        src: "{{ vlc_src }}"
+        dest: "{{ vlc_local }}"
+        remote_src: yes
 
-    - name: DEBUG résultat VLC
+    - name: Installer VLC (silencieux)
+      ansible.windows.win_package:
+        path: "{{ vlc_local }}"
+        arguments: "/S"
+        state: present
+
+    - name: Vérifier VLC (présence du binaire)
+      ansible.windows.win_stat:
+        path: "C:\\Program Files\\VideoLAN\\VLC\\vlc.exe"
+      register: vlc_bin
+
+    - name: Nettoyer l'installeur local
+      ansible.windows.win_file:
+        path: "{{ vlc_local }}"
+        state: absent
+      when: vlc_bin.stat.exists
+
+    - name: DEBUG résultat final
       ansible.builtin.debug:
         msg:
-          - "rc={{ vlc_install.rc }}"
-          - "{{ vlc_install.stdout }}"
+          - "VLC installé = {{ vlc_bin.stat.exists }}"
+          - "Installeur local supprimé = {{ vlc_bin.stat.exists }}"
