@@ -1,0 +1,20 @@
+- name: Test installation VLC via winget
+  hosts: "{{ target_group | default('windows') }}"
+  gather_facts: no
+
+  tasks:
+    - name: Vérifier la présence de winget
+      ansible.windows.win_command: winget --version
+      register: winget_check
+      changed_when: false
+      failed_when: winget_check.rc != 0
+
+    - name: Installer VLC
+      ansible.windows.win_command: >
+        winget install --id VideoLAN.VLC
+        --exact
+        --silent
+        --accept-package-agreements
+        --accept-source-agreements
+      register: vlc_install
+      changed_when: "'Successfully installed' in vlc_install.stdout"
