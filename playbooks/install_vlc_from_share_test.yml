@@ -1,11 +1,16 @@
 ---
-- name: TEST - Installer VLC depuis partage puis nettoyer
+- name: Installer VLC depuis partage via net use (évite double-hop) + nettoyer
   hosts: all
   gather_facts: no
 
   vars:
     vlc_src: "\\\\nevs02\\s$\\ADMINAPP\\BatMaj\\BundlePush\\NoopyBIN\\NoopyPush\\.bin\\VLC\\vlc-3.0.18-win64.exe"
     vlc_local: "C:\\Temp\\vlc-3.0.18-win64.exe"
+    share_root: "\\\\nevs02\\s$"
+
+    # A FOURNIR via AWX (Extra vars) et idéalement "Prompt on launch"
+    share_user: "{{ vault_share_user | default(omit) }}"
+    share_pass: "{{ vault_share_pass | default(omit) }}"
 
   tasks:
     - name: S'assurer que C:\Temp existe
@@ -13,11 +18,26 @@
         path: C:\Temp
         state: directory
 
-    - name: Copier l'installeur VLC en local
+    - name: Monter le partage avec identifiants (net use)
+      ansible.windows.win_shell: |
+        net use "{{ share_root }}" /delete /y | Out-Null
+        net use "{{ share_root }}" /user:"{{ share_user }}" "{{ share_pass }}" /persistent:no
+      no_log: true
+      register: netuse_map
+      changed_when: false
+
+    - name: Copier l'installeur VLC en local (depuis partage monté)
       ansible.windows.win_copy:
         src: "{{ vlc_src }}"
         dest: "{{ vlc_local }}"
         remote_src: yes
+
+    - name: Démonter le partage (net use /delete)
+      ansible.windows.win_shell: |
+        net use "{{ share_root }}" /delete /y
+      no_log: true
+      changed_when: false
+      failed_when: false
 
     - name: Installer VLC (silencieux)
       ansible.windows.win_package:
@@ -30,7 +50,7 @@
         path: "C:\\Program Files\\VideoLAN\\VLC\\vlc.exe"
       register: vlc_bin
 
-    - name: Nettoyer l'installeur local
+    - name: Nettoyer l'installeur local si VLC installé
       ansible.windows.win_file:
         path: "{{ vlc_local }}"
         state: absent
@@ -40,4 +60,3 @@
       ansible.builtin.debug:
         msg:
           - "VLC installé = {{ vlc_bin.stat.exists }}"
-          - "Installeur local supprimé = {{ vlc_bin.stat.exists }}"
