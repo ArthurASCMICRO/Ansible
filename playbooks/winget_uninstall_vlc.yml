@@ -1,5 +1,5 @@
 - name: Test désinstallation VLC via winget
-  hosts: "{{ target_group | default('windows') }}"
+  hosts: all
   gather_facts: no
 
   tasks:
