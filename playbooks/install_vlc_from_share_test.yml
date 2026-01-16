@@ -1,16 +1,14 @@
 ---
-- name: Installer VLC depuis partage via net use (évite double-hop) + nettoyer
+- name: Installer VLC depuis partage via net use + Copy-Item + nettoyer
   hosts: all
   gather_facts: no
 
   vars:
+    share_root: "\\\\nevs02\\s$"
     vlc_src: "\\\\nevs02\\s$\\ADMINAPP\\BatMaj\\BundlePush\\NoopyBIN\\NoopyPush\\.bin\\VLC\\vlc-3.0.18-win64.exe"
     vlc_local: "C:\\Temp\\vlc-3.0.18-win64.exe"
-    share_root: "\\\\nevs02\\s$"
-
-    # A FOURNIR via AWX (Extra vars) et idéalement "Prompt on launch"
-    share_user: "{{ vault_share_user | default(omit) }}"
-    share_pass: "{{ vault_share_pass | default(omit) }}"
+    share_user: "{{ vault_share_user }}"
+    share_pass: "{{ vault_share_pass }}"
 
   tasks:
     - name: S'assurer que C:\Temp existe
@@ -23,16 +21,16 @@
         net use "{{ share_root }}" /delete /y | Out-Null
         net use "{{ share_root }}" /user:"{{ share_user }}" "{{ share_pass }}" /persistent:no
       no_log: true
-      register: netuse_map
       changed_when: false
 
-    - name: Copier l'installeur VLC en local (depuis partage monté)
-      ansible.windows.win_copy:
-        src: "{{ vlc_src }}"
-        dest: "{{ vlc_local }}"
-        remote_src: yes
+    - name: Copier VLC en local via Copy-Item
+      ansible.windows.win_shell: |
+        Copy-Item -Path "{{ vlc_src }}" -Destination "{{ vlc_local }}" -Force
+        if (Test-Path "{{ vlc_local }}") { "OK: copied" } else { "KO: not copied" }
+      register: copy_result
+      changed_when: "'OK: copied' in copy_result.stdout"
 
-    - name: Démonter le partage (net use /delete)
+    - name: Démonter le partage
       ansible.windows.win_shell: |
         net use "{{ share_root }}" /delete /y
       no_log: true
@@ -44,8 +42,9 @@
         path: "{{ vlc_local }}"
         arguments: "/S"
         state: present
+      when: "'OK: copied' in copy_result.stdout"
 
-    - name: Vérifier VLC (présence du binaire)
+    - name: Vérifier VLC
       ansible.windows.win_stat:
         path: "C:\\Program Files\\VideoLAN\\VLC\\vlc.exe"
       register: vlc_bin
@@ -59,4 +58,5 @@
     - name: DEBUG résultat final
       ansible.builtin.debug:
         msg:
-          - "VLC installé = {{ vlc_bin.stat.exists }}"
+          - "copy={{ copy_result.stdout | default('') }}"
+          - "VLC installé={{ vlc_bin.stat.exists }}"
