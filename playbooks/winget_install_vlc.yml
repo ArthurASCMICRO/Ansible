@@ -1,29 +1,67 @@
-- name: VLC via winget (install/upgrade)
+---
+- name: Winget - désactiver msstore + installer VLC
   hosts: all
   gather_facts: no
 
   tasks:
     - name: Vérifier winget
       ansible.windows.win_command: winget --version
-      register: winget_check
+      register: winget_version
       changed_when: false
 
-    - name: Savoir si VLC est déjà installé
-      ansible.windows.win_command: winget list --id VideoLAN.VLC --exact
-      register: vlc_list
+    - name: Désactiver la source msstore (si présente)
+      ansible.windows.win_command: winget source remove --name msstore
+      register: rm_msstore
+      changed_when: rm_msstore.rc == 0
+      failed_when: false
+
+    - name: Reset sources
+      ansible.windows.win_command: winget source reset --force
+      register: src_reset
       changed_when: false
       failed_when: false
 
-    - name: Installer VLC si absent
-      ansible.windows.win_command: >
-        winget install --id VideoLAN.VLC --exact --silent
-        --accept-package-agreements --accept-source-agreements
-        --disable-interactivity
-      when: vlc_list.rc != 0
+    - name: Update sources
+      ansible.windows.win_command: winget source update
+      register: src_update
+      changed_when: false
+      failed_when: false
 
-    - name: Mettre à jour VLC si présent
+    - name: Installer/upgrade VLC via source winget (non interactif)
       ansible.windows.win_command: >
-        winget upgrade --id VideoLAN.VLC --exact --silent
-        --accept-package-agreements --accept-source-agreements
+        winget upgrade --id VideoLAN.VLC --exact
+        --source winget
+        --silent
+        --scope machine
+        --accept-package-agreements
+        --accept-source-agreements
         --disable-interactivity
-      when: vlc_list.rc == 0
+      register: vlc_upgrade
+      changed_when: false
+      failed_when: false
+
+    - name: Si upgrade ne trouve rien, tenter install (source winget)
+      ansible.windows.win_command: >
+        winget install --id VideoLAN.VLC --exact
+        --source winget
+        --silent
+        --scope machine
+        --accept-package-agreements
+        --accept-source-agreements
+        --disable-interactivity
+      when: vlc_upgrade.rc != 0
+      register: vlc_install
+      changed_when: false
+      failed_when: false
+
+    - name: DEBUG résultats
+      ansible.builtin.debug:
+        msg:
+          - "winget={{ winget_version.stdout | default('') | trim }}"
+          - "rm_msstore_rc={{ rm_msstore.rc }}"
+          - "src_reset_rc={{ src_reset.rc }}"
+          - "src_update_rc={{ src_update.rc }}"
+          - "upgrade_rc={{ vlc_upgrade.rc }}"
+          - "{{ vlc_upgrade.stdout | default('') }}"
+          - "install_rc={{ (vlc_install.rc if (vlc_install is defined) else 'n/a') }}"
+          - "{{ (vlc_install.stdout if (vlc_install is defined) else '') }}"
