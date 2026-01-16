@@ -1,0 +1,36 @@
+- name: Diagnostic winget VLC
+  hosts: all
+  gather_facts: no
+
+  tasks:
+    - name: Winget version
+      ansible.windows.win_command: winget --version
+      register: winget_version
+      changed_when: false
+
+    - name: Afficher winget version
+      ansible.builtin.debug:
+        var: winget_version.stdout
+
+    - name: Winget list VLC (id exact)
+      ansible.windows.win_command: winget list --id VideoLAN.VLC --exact
+      register: vlc_list
+      changed_when: false
+      failed_when: false
+
+    - name: Afficher winget list (rc + stdout)
+      ansible.builtin.debug:
+        msg:
+          - "rc={{ vlc_list.rc }}"
+          - "{{ vlc_list.stdout }}"
+          - "{{ vlc_list.stderr }}"
+
+    - name: Winget show VLC
+      ansible.windows.win_command: winget show --id VideoLAN.VLC --exact
+      register: vlc_show
+      changed_when: false
+      failed_when: false
+
+    - name: Afficher winget show (stdout)
+      ansible.builtin.debug:
+        var: vlc_show.stdout
