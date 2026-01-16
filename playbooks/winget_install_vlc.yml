@@ -1,20 +1,29 @@
-- name: Test installation VLC via winget
+- name: VLC via winget (install/upgrade)
   hosts: all
   gather_facts: no
 
   tasks:
-    - name: Vérifier la présence de winget
+    - name: Vérifier winget
       ansible.windows.win_command: winget --version
       register: winget_check
       changed_when: false
-      failed_when: winget_check.rc != 0
 
-    - name: Installer VLC
+    - name: Savoir si VLC est déjà installé
+      ansible.windows.win_command: winget list --id VideoLAN.VLC --exact
+      register: vlc_list
+      changed_when: false
+      failed_when: false
+
+    - name: Installer VLC si absent
       ansible.windows.win_command: >
-        winget install --id VideoLAN.VLC
-        --exact
-        --silent
-        --accept-package-agreements
-        --accept-source-agreements
-      register: vlc_install
-      changed_when: "'Successfully installed' in vlc_install.stdout"
+        winget install --id VideoLAN.VLC --exact --silent
+        --accept-package-agreements --accept-source-agreements
+        --disable-interactivity
+      when: vlc_list.rc != 0
+
+    - name: Mettre à jour VLC si présent
+      ansible.windows.win_command: >
+        winget upgrade --id VideoLAN.VLC --exact --silent
+        --accept-package-agreements --accept-source-agreements
+        --disable-interactivity
+      when: vlc_list.rc == 0
