@@ -5,8 +5,8 @@
 
   vars:
     share_root: "\\\\nevs02\\s$"
-    vlc_src: "\\\\nevs02\\s$\\ADMINAPP\\BatMaj\\BundlePush\\NoopyBIN\\NoopyPush\\.bin\\VLC\\vlc-3.0.18-win64.exe"
-    vlc_local: "C:\\Temp\\vlc-3.0.18-win64.exe"
+    vlc_src: "\\\\nevs02\\s$\\ADMINAPP\\sources\\VLC\\vlc-3.0.23-win64.exe"
+    vlc_local: "C:\\Temp\\vlc-3.0.23-win64.exe"
     share_user: "{{ vault_share_user }}"
     share_pass: "{{ vault_share_pass }}"
 
