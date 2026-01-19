@@ -23,6 +23,27 @@
             net use "{{ share_root }}" /user:"{{ share_user }}" "{{ share_pass }}" /persistent:no
           no_log: true
           changed_when: false
+        - name: Qui suis-je (contexte WinRM) ?
+          ansible.windows.win_shell: whoami
+          register: who
+          changed_when: false
+        
+        - name: DEBUG whoami
+          ansible.builtin.debug:
+            var: who.stdout
+        
+        - name: DEBUG net use
+          ansible.windows.win_shell: net use
+          register: netuse
+          changed_when: false
+        
+        - name: Afficher net use
+          ansible.builtin.debug:
+            var: netuse.stdout_lines
+
+
+
+
 
         - name: Tester l'accès au fichier VLC sur le partage
           ansible.windows.win_shell: |
