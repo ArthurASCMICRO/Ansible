@@ -16,36 +16,52 @@
         path: C:\Temp
         state: directory
 
-    - name: Monter le partage avec identifiants (net use)
-      ansible.windows.win_shell: |
-        net use "{{ share_root }}" /delete /y | Out-Null
-        net use "{{ share_root }}" /user:"{{ share_user }}" "{{ share_pass }}" /persistent:no
-      no_log: true
-      changed_when: false
+    - block:
+        - name: Monter le partage avec identifiants (net use)
+          ansible.windows.win_shell: |
+            net use "{{ share_root }}" /delete /y | Out-Null
+            net use "{{ share_root }}" /user:"{{ share_user }}" "{{ share_pass }}" /persistent:no
+          no_log: true
+          changed_when: false
 
-    - name: Copier VLC en local via Copy-Item
-      ansible.windows.win_shell: |
-        Copy-Item -Path "{{ vlc_src }}" -Destination "{{ vlc_local }}" -Force
-      changed_when: true
+        - name: Tester l'accès au fichier VLC sur le partage
+          ansible.windows.win_shell: |
+            $p="{{ vlc_src }}"
+            "Test-Path: " + (Test-Path $p)
+            try { (Get-Item $p -ErrorAction Stop).FullName; "Get-Item OK" }
+            catch { "Get-Item KO: " + $_.Exception.Message }
+          register: share_test
+          changed_when: false
 
-    - name: Vérifier que l'installeur VLC est bien présent en local
-      ansible.windows.win_stat:
-        path: "{{ vlc_local }}"
-      register: vlc_local_stat
+        - name: DEBUG test accès fichier
+          ansible.builtin.debug:
+            var: share_test.stdout_lines
 
-    - name: Démonter le partage
-      ansible.windows.win_shell: |
-        net use "{{ share_root }}" /delete /y
-      no_log: true
-      changed_when: false
-      failed_when: false
+        - name: Copier VLC en local via Copy-Item
+          ansible.windows.win_shell: |
+            Copy-Item -Path "{{ vlc_src }}" -Destination "{{ vlc_local }}" -Force -ErrorAction Stop
+          register: copy_result
+          changed_when: true
 
-    - name: Installer VLC (silencieux)
-      ansible.windows.win_package:
-        path: "{{ vlc_local }}"
-        arguments: "/S"
-        state: present
-      when: vlc_local_stat.stat.exists
+        - name: Vérifier que l'installeur VLC est présent en local
+          ansible.windows.win_stat:
+            path: "{{ vlc_local }}"
+          register: vlc_local_stat
+
+        - name: Installer VLC (silencieux)
+          ansible.windows.win_package:
+            path: "{{ vlc_local }}"
+            arguments: "/S"
+            state: present
+          when: vlc_local_stat.stat.exists
+
+      always:
+        - name: Démonter le partage (toujours)
+          ansible.windows.win_shell: |
+            net use "{{ share_root }}" /delete /y
+          no_log: true
+          changed_when: false
+          failed_when: false
 
     - name: Vérifier VLC
       ansible.windows.win_stat:
@@ -61,5 +77,4 @@
     - name: DEBUG résultat final
       ansible.builtin.debug:
         msg:
-          - "Installeur local présent={{ vlc_local_stat.stat.exists }}"
           - "VLC installé={{ vlc_bin.stat.exists }}"
