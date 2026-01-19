@@ -1,5 +1,5 @@
 ---
-- name: Installer VLC depuis partage via net use + Copy-Item + nettoyer
+- name: Installer VLC depuis partage via net use + Copy-Item + nettoyer (strict)
   hosts: all
   gather_facts: no
 
@@ -17,33 +17,23 @@
         state: directory
 
     - block:
-        - name: Monter le partage avec identifiants (net use)
+        - name: Monter le partage avec identifiants (net use) + vérifier
           ansible.windows.win_shell: |
-            net use "{{ share_root }}" /delete /y | Out-Null
-            net use "{{ share_root }}" /user:"{{ share_user }}" "{{ share_pass }}" /persistent:no
+            net use "{{ share_root }}" /delete /y 2>&1 | Out-String
+            net use "{{ share_root }}" /user:"{{ share_user }}" "{{ share_pass }}" /persistent:no 2>&1 | Out-String
+            $rc = $LASTEXITCODE
+            "EXITCODE=$rc"
+            net use 2>&1 | Out-String
+            exit $rc
+          register: netuse_map
           no_log: true
           changed_when: false
-        - name: Qui suis-je (contexte WinRM) ?
-          ansible.windows.win_shell: whoami
-          register: who
-          changed_when: false
-        
-        - name: DEBUG whoami
+
+        - name: DEBUG net use (sans mot de passe)
           ansible.builtin.debug:
-            var: who.stdout
-        
-        - name: DEBUG net use
-          ansible.windows.win_shell: net use
-          register: netuse
-          changed_when: false
-        
-        - name: Afficher net use
-          ansible.builtin.debug:
-            var: netuse.stdout_lines
-
-
-
-
+            msg:
+              - "net use rc={{ netuse_map.rc }}"
+              - "{{ (netuse_map.stdout | default('')) | regex_replace(vault_share_pass, '***') if (vault_share_pass is defined) else (netuse_map.stdout | default('')) }}"
 
         - name: Tester l'accès au fichier VLC sur le partage
           ansible.windows.win_shell: |
@@ -61,7 +51,6 @@
         - name: Copier VLC en local via Copy-Item
           ansible.windows.win_shell: |
             Copy-Item -Path "{{ vlc_src }}" -Destination "{{ vlc_local }}" -Force -ErrorAction Stop
-          register: copy_result
           changed_when: true
 
         - name: Vérifier que l'installeur VLC est présent en local
